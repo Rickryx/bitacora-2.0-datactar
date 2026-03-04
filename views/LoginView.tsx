@@ -37,7 +37,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   return (
     <div className="min-h-screen flex flex-col justify-between p-8 bg-white overflow-hidden">
       <div className="pt-8">
-        <h1 className="text-primary text-4xl font-extrabold tracking-tight">Bitácora 2.0</h1>
+        <h1 className="text-primary text-4xl font-extrabold tracking-tight">MINU</h1>
         <p className="text-slate-500 text-lg font-medium">Datactar</p>
       </div>
 

@@ -112,7 +112,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ user, onNavigate, onVoice
     <Layout activeView={AppView.DASHBOARD} onNavigate={onNavigate} onVoiceClick={onVoiceClick}>
       <div className="pt-8 px-6 flex justify-between items-start mb-4">
         <div>
-          <h1 className="text-primary text-2xl font-extrabold tracking-tight">Bitácora 2.0</h1>
+          <h1 className="text-primary text-2xl font-extrabold tracking-tight">MINU</h1>
           <p className="text-slate-500 text-sm font-medium -mt-1">Datactar</p>
         </div>
         <button
