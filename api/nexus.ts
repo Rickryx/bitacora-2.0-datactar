@@ -18,10 +18,8 @@ export default async function handler(req: Request) {
       );
     }
 
-    // Supabase Edge Functions require the Supabase anon key in gateway headers.
-    // The dc_live_ key goes to the bridge function in the body for internal validation.
-    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
-
+    // The Nexus bridge (Datactar's Supabase project) validates dc_live_ internally.
+    // We send it in all common auth header formats so the bridge can pick whichever it expects.
     const payload = test
       ? { test: true, api_key }
       : { event: 'log.created', source: 'bitacora', api_key, data: log };
@@ -30,9 +28,8 @@ export default async function handler(req: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseAnonKey,          // Supabase gateway auth
-        'Authorization': `Bearer ${api_key}`, // dc_live_ key as bearer for bridge
-        'x-api-key': api_key,               // alternative header bridge may check
+        'Authorization': `Bearer ${api_key}`,
+        'x-api-key': api_key,
       },
       body: JSON.stringify(payload),
     });
