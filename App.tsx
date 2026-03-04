@@ -45,14 +45,12 @@ const App: React.FC = () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        if (!user) {
-          const profile = await fetchProfile(session.user.id);
-          if (profile?.role === 'ADMIN') {
-            setCurrentView(AppView.DASHBOARD);
-          } else {
-            setCurrentView(AppView.WELCOME);
-          }
+      if (event === 'SIGNED_IN' && session?.user) {
+        const profile = await fetchProfile(session.user.id);
+        if (profile?.role === 'ADMIN' || profile?.role === 'COORDINATOR') {
+          setCurrentView(AppView.DASHBOARD);
+        } else {
+          setCurrentView(AppView.WELCOME);
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
