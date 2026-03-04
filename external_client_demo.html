@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Eventos - App Externa</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .log-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-VISITOR {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .badge-DELIVERY {
+            background: #f97316;
+            color: white;
+        }
+
+        .badge-SERVICE {
+            background: #9333ea;
+            color: white;
+        }
+
+        .badge-ROUND {
+            background: #22c55e;
+            color: white;
+        }
+
+        .badge-INCIDENT {
+            background: #ef4444;
+            color: white;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .log-title {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .log-subtitle {
+            margin: 4px 0 0 0;
+            font-size: 0.95rem;
+            color: #94a3b8;
+        }
+
+        .log-description {
+            margin: 15px 0;
+            padding: 12px;
+            background: #0f172a;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .detail-item {
+            background: #334155;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .detail-label {
+            font-size: 10px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .detail-value {
+            font-size: 13px;
+            color: #f1f5f9;
+            font-weight: 600;
+        }
+
+        .media-container {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+
+        .media-image {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #334155;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header style="margin-bottom: 30px;">
+            <h1 style="margin-bottom: 5px; font-size: 2.5rem; font-weight: 800;">📡 Monitor Externo</h1>
+            <p style="color: #94a3b8; font-size: 1.1rem;">Seguimiento de eventos en tiempo real de Datactar Bitácora</p>
+        </header>
+        <div id="logs-container"></div>
+    </div>
+
+    <script>
+        // CLIENT CONFIGURATION
+        const SUPABASE_URL = 'https://vedckaefmpptxcfpdvft.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_K8ISx2yzvYM8go7BjqbL-Q_A2ovfm41'; // Public Anon Key
+
+        const { createClient } = supabase;
+        const client = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const container = document.getElementById('logs-container');
+
+        function addLog(log) {
+            const div = document.createElement('div');
+            div.className = 'log-card';
+
+            const time = new Date(log.occurred_at || log.created_at).toLocaleString('es-CO', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                day: '2-digit',
+                month: 'short'
+            });
+            const badgeClass = `badge-${log.type}`;
+
+            // Build Details HTML
+            let detailsHtml = '';
+            if (log.details && typeof log.details === 'object' && Object.keys(log.details).length > 0) {
+                detailsHtml = '<div class="details-grid">';
+                for (const [key, value] of Object.entries(log.details)) {
+                    if (value) {
+                        detailsHtml += `
+                            <div class="detail-item">
+                                <div class="detail-label">${key}</div>
+                                <div class="detail-value">${value}</div>
+                            </div>
+                        `;
+                    }
+                }
+                detailsHtml += '</div>';
+            }
+
+            // Build Media HTML
+            let mediaHtml = '';
+            if (log.media_urls && Array.isArray(log.media_urls) && log.media_urls.length > 0) {
+                mediaHtml = '<div class="media-container">';
+                log.media_urls.forEach(url => {
+                    mediaHtml += `<img src="${url}" class="media-image" alt="Evidencia" onerror="this.style.display='none'">`;
+                });
+                mediaHtml += '</div>';
+            }
+
+            div.innerHTML = `
+                <div class="log-header">
+                    <span class="badge ${badgeClass}">${log.type}</span>
+                    <span class="timestamp">${time}</span>
+                </div>
+                <h3 class="log-title">${log.title}</h3>
+                ${log.subtitle ? `<p class="log-subtitle">${log.subtitle}</p>` : ''}
+                
+                ${log.description ? `
+                    <div class="log-description">
+                        ${log.description}
+                    </div>
+                ` : ''}
+
+                ${detailsHtml}
+                ${mediaHtml}
+            `;
+
+            container.insertBefore(div, container.firstChild);
+        }
+
+        // Subscribe to Realtime changes
+        client
+            .channel('public:logs')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
+                console.log('New Log:', payload.new);
+                addLog(payload.new);
+            })
+            .subscribe((status) => {
+                console.log('Subscription status:', status);
+            });
+
+        // Load some initial data
+        async function loadInitial() {
+            const { data, error } = await client
+                .from('logs')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (error) {
+                console.error('Error loading data:', error);
+                return;
+            }
+            // Reverse so they are added in correct order (newest first in the UI as we use insertBefore container.firstChild)
+            if (data) data.reverse().forEach(addLog);
+        }
+
+        loadInitial();
+    </script>
+</body>
+
+</html>

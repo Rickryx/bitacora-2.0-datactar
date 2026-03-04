@@ -1,0 +1,8 @@
+{
+  "name": "Bitácora 2.0 - Datactar",
+  "description": "Una aplicación avanzada para personal de seguridad que permite el registro de eventos, rondas e incidentes mediante voz e inteligencia artificial.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
