@@ -6,13 +6,14 @@ import WebhookManager from '../components/WebhookManager';
 import NexusConfigPanel from '../components/NexusConfigPanel';
 import AdminChat from '../components/AdminChat';
 import WeeklyCalendar from '../components/WeeklyCalendar';
+import { generateMinutaPDF, generateResumenPDF } from '../services/reportService';
 
 interface AdminViewProps {
     user: User;
     onNavigate: (view: AppView) => void;
 }
 
-type AdminTab = 'control' | 'users' | 'entities' | 'shifts' | 'webhooks' | 'nexus';
+type AdminTab = 'control' | 'users' | 'entities' | 'shifts' | 'webhooks' | 'nexus' | 'reportes';
 
 const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     const [profiles, setProfiles] = useState<any[]>([]);
@@ -41,6 +42,14 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     const [sortBy, setSortBy] = useState<string>('name');
     const [shiftAlerts, setShiftAlerts] = useState<any[]>([]);
 
+    // Report tab state
+    const [reportPeriod, setReportPeriod] = useState<'hoy' | 'semana' | 'mes' | 'custom'>('semana');
+    const [reportLogs, setReportLogs] = useState<any[]>([]);
+    const [reportLoading, setReportLoading] = useState(false);
+    const [customFrom, setCustomFrom] = useState('');
+    const [customTo, setCustomTo] = useState('');
+    const [selectedEntityId, setSelectedEntityId] = useState('all');
+
     useEffect(() => {
         fetchData();
     }, [activeTab]);
@@ -55,6 +64,10 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
         else if (activeTab === 'entities') await fetchEntities();
         else if (activeTab === 'shifts') await fetchShifts();
         else if (activeTab === 'nexus') { if (entities.length === 0) await fetchEntities(); }
+        else if (activeTab === 'reportes') {
+            if (entities.length === 0) await fetchEntities();
+            await fetchReportData();
+        }
         setLoading(false);
     };
 
@@ -129,6 +142,44 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
         if (error) console.error(error);
         if (profiles.length === 0) await fetchProfiles();
         if (entities.length === 0) await fetchEntities();
+    };
+
+    const fetchReportData = async (period = reportPeriod, entityId = selectedEntityId, from = customFrom, to = customTo) => {
+        setReportLoading(true);
+        const now = new Date();
+        let dateFrom: string;
+        let dateTo = now.toISOString();
+
+        if (period === 'hoy') {
+            dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        } else if (period === 'semana') {
+            const d = new Date(now);
+            d.setDate(d.getDate() - 7);
+            dateFrom = d.toISOString();
+        } else if (period === 'mes') {
+            const d = new Date(now);
+            d.setMonth(d.getMonth() - 1);
+            dateFrom = d.toISOString();
+        } else {
+            dateFrom = from ? new Date(from).toISOString() : new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            dateTo = to ? new Date(to + 'T23:59:59').toISOString() : dateTo;
+        }
+
+        let query = supabase
+            .from('logs')
+            .select('*, profiles(id, full_name), entities(name)')
+            .gte('created_at', dateFrom)
+            .lte('created_at', dateTo)
+            .order('created_at', { ascending: true });
+
+        const effectiveEntityId = user.role === 'COORDINATOR' && user.entity_id ? user.entity_id : entityId;
+        if (effectiveEntityId && effectiveEntityId !== 'all') {
+            query = query.eq('entity_id', effectiveEntityId);
+        }
+
+        const { data } = await query;
+        if (data) setReportLogs(data);
+        setReportLoading(false);
     };
 
     const handleSaveEntity = async () => {
@@ -212,7 +263,11 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                 {!detailView && (() => {
                     const isCoordinator = user.role === 'COORDINATOR';
                     const tabs: { id: AdminTab; label: string }[] = isCoordinator
-                        ? [{ id: 'control', label: 'Panel Control' }, { id: 'shifts', label: 'Turnos' }]
+                        ? [
+                            { id: 'control', label: 'Panel Control' },
+                            { id: 'shifts', label: 'Turnos' },
+                            { id: 'reportes', label: 'Reportes' },
+                          ]
                         : [
                             { id: 'control', label: 'Panel Control' },
                             { id: 'users', label: 'Usuarios' },
@@ -220,6 +275,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                             { id: 'shifts', label: 'Turnos' },
                             { id: 'webhooks', label: 'Integraciones' },
                             { id: 'nexus', label: 'Nexus' },
+                            { id: 'reportes', label: 'Reportes' },
                           ];
                     return (
                         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -334,7 +390,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                         {activeTab === 'control' && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* Metric Cards */}
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm">
                                         <div className="size-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
                                             <span className="material-symbols-outlined">group</span>
@@ -477,9 +533,9 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                     </select>
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {loading ? (
-                                        <div className="text-center py-8 text-slate-400 font-medium">Cargando perfiles...</div>
+                                        <div className="col-span-full text-center py-8 text-slate-400 font-medium">Cargando perfiles...</div>
                                     ) : (
                                         profiles
                                             .filter(p => !filterRole || p.role === filterRole)
@@ -742,6 +798,188 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                         }}
                                     />
                                 </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'reportes' && (
+                            <div className="space-y-6 animate-in fade-in duration-500">
+                                {/* Period selector + entity filter */}
+                                <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 shadow-sm">
+                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Período del Reporte</h3>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {(['hoy', 'semana', 'mes', 'custom'] as const).map(p => (
+                                            <button
+                                                key={p}
+                                                onClick={() => {
+                                                    setReportPeriod(p);
+                                                    if (p !== 'custom') fetchReportData(p, selectedEntityId, customFrom, customTo);
+                                                }}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${reportPeriod === p ? 'bg-primary text-white shadow-soft' : 'bg-slate-50 text-slate-400'}`}
+                                            >
+                                                {p === 'hoy' ? 'Hoy' : p === 'semana' ? 'Esta semana' : p === 'mes' ? 'Este mes' : 'Personalizado'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {reportPeriod === 'custom' && (
+                                        <div className="flex gap-4 flex-wrap">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desde</label>
+                                                <input
+                                                    type="date"
+                                                    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/10"
+                                                    value={customFrom}
+                                                    onChange={e => setCustomFrom(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hasta</label>
+                                                <input
+                                                    type="date"
+                                                    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/10"
+                                                    value={customTo}
+                                                    onChange={e => setCustomTo(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="flex items-end">
+                                                <button
+                                                    onClick={() => fetchReportData('custom', selectedEntityId, customFrom, customTo)}
+                                                    className="px-5 py-2 bg-primary text-white rounded-xl font-bold text-sm shadow-soft"
+                                                >
+                                                    Buscar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {user.role !== 'COORDINATOR' && entities.length > 0 && (
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Entidad</label>
+                                            <select
+                                                className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/10"
+                                                value={selectedEntityId}
+                                                onChange={e => {
+                                                    setSelectedEntityId(e.target.value);
+                                                    fetchReportData(reportPeriod, e.target.value, customFrom, customTo);
+                                                }}
+                                            >
+                                                <option value="all">Todas las entidades</option>
+                                                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Metrics cards */}
+                                {reportLoading ? (
+                                    <div className="text-center py-10 text-slate-400 font-medium">Cargando datos...</div>
+                                ) : (
+                                    <>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            {[
+                                                { label: 'Visitantes', count: reportLogs.filter(l => l.type === 'VISITOR').length, icon: 'group', color: 'bg-blue-50 text-blue-600' },
+                                                { label: 'Rondas', count: reportLogs.filter(l => l.type === 'ROUND').length, icon: 'directions_walk', color: 'bg-green-50 text-green-600' },
+                                                { label: 'Incidentes', count: reportLogs.filter(l => l.type === 'INCIDENT').length, icon: 'warning', color: 'bg-red-50 text-red-600' },
+                                                { label: 'Encomiendas', count: reportLogs.filter(l => l.type === 'DELIVERY' || l.type === 'ENCOMIENDA').length, icon: 'inventory_2', color: 'bg-amber-50 text-amber-600' },
+                                            ].map(card => (
+                                                <div key={card.label} className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm">
+                                                    <div className={`size-10 rounded-2xl ${card.color} flex items-center justify-center mb-3`}>
+                                                        <span className="material-symbols-outlined">{card.icon}</span>
+                                                    </div>
+                                                    <h4 className="text-2xl font-black text-slate-900">{card.count}</h4>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Download buttons */}
+                                        <div className="flex gap-4 flex-wrap">
+                                            <button
+                                                onClick={() => {
+                                                    const entityName = selectedEntityId === 'all'
+                                                        ? 'Todas las Entidades'
+                                                        : (entities.find(e => e.id === selectedEntityId)?.name || 'Entidad');
+                                                    generateMinutaPDF(reportLogs, {
+                                                        entityName,
+                                                        dateFrom: customFrom || new Date(Date.now() - 7 * 86400000).toLocaleDateString('es-CO'),
+                                                        dateTo: customTo || new Date().toLocaleDateString('es-CO'),
+                                                        generatedBy: user.name || 'Administrador',
+                                                    });
+                                                }}
+                                                className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-xl active:scale-[0.98] transition-all"
+                                            >
+                                                <span className="material-symbols-outlined !text-lg">description</span>
+                                                Descargar Minuta PDF
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const entityName = selectedEntityId === 'all'
+                                                        ? 'Todas las Entidades'
+                                                        : (entities.find(e => e.id === selectedEntityId)?.name || 'Entidad');
+                                                    generateResumenPDF(reportLogs, shifts, {
+                                                        entityName,
+                                                        dateFrom: customFrom || new Date(Date.now() - 7 * 86400000).toLocaleDateString('es-CO'),
+                                                        dateTo: customTo || new Date().toLocaleDateString('es-CO'),
+                                                        generatedBy: user.name || 'Administrador',
+                                                    });
+                                                }}
+                                                className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-primary/20 active:scale-[0.98] transition-all"
+                                            >
+                                                <span className="material-symbols-outlined !text-lg">bar_chart</span>
+                                                Descargar Resumen PDF
+                                            </button>
+                                        </div>
+
+                                        {/* Preview table */}
+                                        {reportLogs.length > 0 && (
+                                            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+                                                <div className="px-6 py-4 border-b border-slate-50">
+                                                    <h3 className="text-sm font-black text-slate-900">Vista previa — {reportLogs.length} eventos</h3>
+                                                </div>
+                                                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead className="sticky top-0 bg-slate-50">
+                                                            <tr>
+                                                                <th className="text-left px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Hora</th>
+                                                                <th className="text-left px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
+                                                                <th className="text-left px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Evento</th>
+                                                                <th className="text-left px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
+                                                                <th className="text-left px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nivel</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-50">
+                                                            {reportLogs.slice(0, 10).map(log => (
+                                                                <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                                                                    <td className="px-5 py-3 text-xs text-slate-500 font-medium whitespace-nowrap">
+                                                                        {new Date(log.occurred_at || log.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                                    </td>
+                                                                    <td className="px-5 py-3">
+                                                                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-black uppercase">{log.type}</span>
+                                                                    </td>
+                                                                    <td className="px-5 py-3 font-bold text-slate-900 text-xs max-w-[200px] truncate">{log.title}</td>
+                                                                    <td className="px-5 py-3 text-[10px] font-bold text-slate-500">{log.status}</td>
+                                                                    <td className="px-5 py-3">
+                                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${log.critical_level === 'ALTA' ? 'bg-red-100 text-red-600' : log.critical_level === 'MEDIA' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
+                                                                            {log.critical_level || 'BAJA'}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                    {reportLogs.length > 10 && (
+                                                        <p className="text-center py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-slate-50">
+                                                            +{reportLogs.length - 10} más en el PDF
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {reportLogs.length === 0 && (
+                                            <div className="bg-slate-50 border border-dashed border-slate-200 p-10 rounded-3xl text-center">
+                                                <p className="text-xs text-slate-400 font-bold uppercase">Sin eventos en el período seleccionado</p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         )}
 

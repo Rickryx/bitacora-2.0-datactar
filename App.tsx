@@ -444,8 +444,13 @@ const App: React.FC = () => {
     }
   };
 
+  const isAdminView = currentView === AppView.ADMIN;
+
   return (
-    <div className="min-h-screen flex flex-col relative max-w-md mx-auto bg-white shadow-2xl overflow-hidden">
+    <div className={isAdminView
+      ? "min-h-screen bg-slate-50"
+      : "min-h-screen flex flex-col relative max-w-md mx-auto bg-white shadow-2xl overflow-hidden"
+    }>
       {renderView()}
 
       {isVoiceActive && (
