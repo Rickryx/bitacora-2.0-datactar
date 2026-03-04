@@ -337,14 +337,14 @@ const App: React.FC = () => {
 
       if (!config) return;
 
-      const response = await fetch('/api/nexus', {
+      const response = await fetch(config.nexus_endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          log: logData,
-          nexus_endpoint: config.nexus_endpoint,
-          api_key: config.api_key
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.api_key}`,
+          'apikey': config.api_key
+        },
+        body: JSON.stringify({ log: logData })
       });
 
       if (!response.ok) {

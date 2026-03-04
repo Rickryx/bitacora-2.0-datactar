@@ -47,16 +47,19 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/nexus', {
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nexus_endpoint: endpoint, api_key: key }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`,
+          'apikey': key
+        },
+        body: JSON.stringify({ test: true }),
       });
-      const data = await res.json();
-      if (res.ok && data.status === 'connected') {
-        setTestResult({ ok: true, message: 'Conexión exitosa' });
+      if (res.ok) {
+        setTestResult({ ok: true, message: `Conexión exitosa (HTTP ${res.status})` });
       } else {
-        setTestResult({ ok: false, message: data.error || `Error ${res.status}` });
+        setTestResult({ ok: false, message: `Error HTTP ${res.status}` });
       }
     } catch (err: any) {
       setTestResult({ ok: false, message: err.message });

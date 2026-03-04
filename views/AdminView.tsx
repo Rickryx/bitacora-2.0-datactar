@@ -226,7 +226,13 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     };
 
     const handleSaveShift = async () => {
-        const { error } = await supabase.from('shifts').insert([shiftForm]);
+        const toISO = (dt: string) => dt ? new Date(dt).toISOString() : null;
+        const payload = {
+            ...shiftForm,
+            scheduled_start: toISO(shiftForm.scheduled_start),
+            scheduled_end: toISO(shiftForm.scheduled_end),
+        };
+        const { error } = await supabase.from('shifts').insert([payload]);
         if (error) alert(error.message);
         else {
             setShiftForm({ user_id: '', entity_id: '', scheduled_start: '', scheduled_end: '', expected_rounds: 3 });
