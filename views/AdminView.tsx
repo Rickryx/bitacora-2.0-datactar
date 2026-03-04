@@ -88,10 +88,15 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
 
         const { data: activeShifts } = await supabase
             .from('shifts')
-            .select('*, entities(name), profiles(full_name)')
+            .select('*, entities(name)')
             .eq('status', 'ACTIVE');
 
         if (!activeShifts) { setShiftAlerts([]); return; }
+
+        // Resolve guard names from profiles
+        const { data: profs } = await supabase.from('profiles').select('id, full_name');
+        const profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+        activeShifts.forEach(s => { s.profiles = profMap[s.user_id] || null; });
 
         const { data: roundLogs } = await supabase
             .from('logs')
@@ -143,23 +148,43 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     };
 
     const fetchEntities = async () => {
-        const { data, error } = await supabase.from('entities').select('*, profiles(id, full_name, role, avatar_url)').order('name');
-        if (data) {
-            setEntities(data);
-        } else if (error) {
-            console.error('fetchEntities (with profiles):', error.message);
-            // Fallback: load entities without staff join
-            const { data: plain } = await supabase.from('entities').select('*').order('name');
-            if (plain) setEntities(plain);
-        }
+        // Fetch entities and profiles separately — avoids FK join that may not exist in schema
+        const { data: ents, error } = await supabase.from('entities').select('*').order('name');
+        if (error) { console.error('fetchEntities:', error.message); return; }
+
+        const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, full_name, role, avatar_url, entity_id');
+        if (profs) setProfiles(profs);
+
+        const enriched = (ents || []).map(e => ({
+            ...e,
+            profiles: (profs || []).filter(p => p.entity_id === e.id),
+        }));
+        setEntities(enriched);
     };
 
     const fetchShifts = async () => {
-        const { data, error } = await supabase.from('shifts').select('*, profiles(full_name), entities(name)').order('created_at', { ascending: false });
-        if (data) setShifts(data);
-        if (error) console.error(error);
-        if (profiles.length === 0) await fetchProfiles();
+        // Fetch shifts without profiles FK join (user_id → auth.users, not public.profiles)
+        const { data: shiftsRaw, error } = await supabase
+            .from('shifts')
+            .select('*, entities(name)')
+            .order('created_at', { ascending: false });
+        if (error) { console.error('fetchShifts:', error.message); return; }
+
+        // Ensure profiles are loaded for name resolution
+        let profs = profiles;
+        if (profs.length === 0) {
+            const { data: p } = await supabase.from('profiles').select('id, full_name, role, avatar_url, entity_id');
+            if (p) { setProfiles(p); profs = p; }
+        }
         if (entities.length === 0) await fetchEntities();
+
+        const enriched = (shiftsRaw || []).map(s => ({
+            ...s,
+            profiles: profs.find(p => p.id === s.user_id) || null,
+        }));
+        setShifts(enriched);
     };
 
     const fetchReportData = async (period = reportPeriod, entityId = selectedEntityId, from = customFrom, to = customTo) => {
@@ -185,7 +210,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
 
         let query = supabase
             .from('logs')
-            .select('*, profiles(id, full_name), entities(name)')
+            .select('*, entities(name)')
             .gte('created_at', dateFrom)
             .lte('created_at', dateTo)
             .order('created_at', { ascending: true });
@@ -195,8 +220,14 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
             query = query.eq('entity_id', effectiveEntityId);
         }
 
-        const { data } = await query;
-        if (data) setReportLogs(data);
+        const { data: logsRaw } = await query;
+
+        // Enrich logs with profile data manually
+        if (logsRaw) {
+            const { data: profs } = await supabase.from('profiles').select('id, full_name');
+            const profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+            setReportLogs(logsRaw.map(l => ({ ...l, profiles: profMap[l.user_id] || null })));
+        }
         setReportLoading(false);
     };
 
