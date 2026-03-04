@@ -36,12 +36,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({ user, onNavigate, onVoice
   };
 
   const handleStartShift = async () => {
-    // Look for a PENDING shift for today
+    // Look for a PENDING shift for today or future
+    const windowStart = new Date();
+    windowStart.setHours(0, 0, 0, 0);
+
     const { data: pendingShift } = await supabase
       .from('shifts')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'PENDING')
+      .gte('scheduled_start', windowStart.toISOString())
       .order('scheduled_start', { ascending: true })
       .limit(1)
       .maybeSingle();

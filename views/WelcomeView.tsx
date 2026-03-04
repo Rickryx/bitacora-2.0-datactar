@@ -19,11 +19,14 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ user, onStartTurn, stats, act
 
   useEffect(() => {
     if (!user?.id) return;
+    const windowStart = new Date();
+    windowStart.setHours(0, 0, 0, 0);
     supabase
       .from('shifts')
       .select('*, entities(name)')
       .eq('user_id', user.id)
       .eq('status', 'PENDING')
+      .gte('scheduled_start', windowStart.toISOString())
       .order('scheduled_start', { ascending: true })
       .limit(3)
       .then(({ data }) => {

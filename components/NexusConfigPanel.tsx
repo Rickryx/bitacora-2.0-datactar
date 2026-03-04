@@ -6,6 +6,14 @@ interface NexusConfigPanelProps {
   entityId: string;
 }
 
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  VISITOR: 'Visitante',
+  INCIDENT: 'Incidente',
+  ROUND: 'Ronda',
+  PACKAGE: 'Encomienda',
+  INVOICE: 'Factura',
+};
+
 const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
   const [config, setConfig] = useState<NexusConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -14,6 +22,7 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [recentEvents, setRecentEvents] = useState<any[]>([]);
   const [form, setForm] = useState({
     nexus_endpoint: 'https://tzgnhbexeyyrmgrcyjvo.supabase.co/functions/v1/bridge',
     api_key: ''
@@ -21,7 +30,18 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
 
   useEffect(() => {
     fetchConfig();
+    fetchRecentEvents();
   }, [entityId]);
+
+  const fetchRecentEvents = async () => {
+    const { data } = await supabase
+      .from('logs')
+      .select('id, type, title, created_at')
+      .eq('entity_id', entityId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (data) setRecentEvents(data);
+  };
 
   const fetchConfig = async () => {
     setLoading(true);
@@ -315,6 +335,31 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
             Desconectar
           </button>
         </div>
+      </div>
+
+      {/* Recent events synced */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Eventos recientes sincronizados</p>
+          <button onClick={fetchRecentEvents} className="text-slate-300 hover:text-primary transition-colors">
+            <span className="material-symbols-outlined text-sm">refresh</span>
+          </button>
+        </div>
+        {recentEvents.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4">Sin eventos registrados aún</p>
+        ) : (
+          <div className="space-y-1.5">
+            {recentEvents.map(ev => (
+              <div key={ev.id} className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl px-3 py-2.5">
+                <span className="material-symbols-outlined text-primary text-base shrink-0">sync</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800 truncate">{ev.title}</p>
+                  <p className="text-[10px] text-slate-400">{EVENT_TYPE_LABEL[ev.type] || ev.type} · {new Date(ev.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

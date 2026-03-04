@@ -211,12 +211,16 @@ const App: React.FC = () => {
   });
 
   const startTurn = async () => {
-    // Activate the guard's next PENDING shift
+    // Activate the guard's next PENDING shift (only today or future)
+    const windowStart = new Date();
+    windowStart.setHours(0, 0, 0, 0);
+
     const { data: nextShift } = await supabase
       .from('shifts')
       .select('*, entities(name)')
       .eq('user_id', user?.id)
       .eq('status', 'PENDING')
+      .gte('scheduled_start', windowStart.toISOString())
       .order('scheduled_start', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -356,8 +360,12 @@ const App: React.FC = () => {
           .update({ last_sync_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
           .eq('entity_id', activeShift.entity_id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Nexus push failed (non-blocking):', err);
+      // Surface network/CORS errors in the UI
+      await supabase.from('nexus_config')
+        .update({ last_error: err?.message || 'Error de red', updated_at: new Date().toISOString() })
+        .eq('entity_id', activeShift.entity_id);
     }
   };
 
