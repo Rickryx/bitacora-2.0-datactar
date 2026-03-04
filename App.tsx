@@ -210,7 +210,28 @@ const App: React.FC = () => {
     signature_url: dbLog.signature_url
   });
 
-  const startTurn = () => {
+  const startTurn = async () => {
+    // Activate the guard's next PENDING shift
+    const { data: nextShift } = await supabase
+      .from('shifts')
+      .select('*, entities(name)')
+      .eq('user_id', user?.id)
+      .eq('status', 'PENDING')
+      .order('scheduled_start', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (nextShift) {
+      await supabase.from('shifts').update({
+        status: 'ACTIVE',
+        actual_start: new Date().toISOString()
+      }).eq('id', nextShift.id);
+
+      const activated = { ...nextShift, status: 'ACTIVE', actual_start: new Date().toISOString() };
+      setActiveShift(activated);
+      fetchStats(activated.entity_id);
+    }
+
     setCurrentView(AppView.DASHBOARD);
   };
 
