@@ -8,7 +8,8 @@ export default async function handler(req: Request) {
   }
 
   try {
-    const { log, nexus_endpoint, api_key } = await req.json();
+    const body = await req.json();
+    const { log, nexus_endpoint, api_key, test } = body;
 
     if (!nexus_endpoint || !api_key) {
       return new Response(
@@ -17,17 +18,21 @@ export default async function handler(req: Request) {
       );
     }
 
-    const payload = {
-      event: log ? 'log.created' : 'ping',
-      source: 'bitacora',
-      data: log || null,
-    };
+    // Supabase Edge Functions require the Supabase anon key in gateway headers.
+    // The dc_live_ key goes to the bridge function in the body for internal validation.
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+
+    const payload = test
+      ? { test: true, api_key }
+      : { event: 'log.created', source: 'bitacora', api_key, data: log };
 
     const nexusResponse = await fetch(nexus_endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': api_key,
+        'apikey': supabaseAnonKey,          // Supabase gateway auth
+        'Authorization': `Bearer ${api_key}`, // dc_live_ key as bearer for bridge
+        'x-api-key': api_key,               // alternative header bridge may check
       },
       body: JSON.stringify(payload),
     });
@@ -40,7 +45,7 @@ export default async function handler(req: Request) {
       );
     }
 
-    const result = await nexusResponse.json();
+    const result = await nexusResponse.json().catch(() => ({}));
     return new Response(JSON.stringify({ success: true, ...result }), {
       headers: { 'Content-Type': 'application/json' },
     });

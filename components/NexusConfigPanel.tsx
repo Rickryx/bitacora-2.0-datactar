@@ -67,19 +67,17 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(endpoint, {
+      // Route through server-side proxy — avoids CORS and uses correct Supabase gateway auth
+      const res = await fetch('/api/nexus', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`,
-          'apikey': key
-        },
-        body: JSON.stringify({ test: true }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nexus_endpoint: endpoint, api_key: key, test: true }),
       });
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setTestResult({ ok: true, message: `Conexión exitosa (HTTP ${res.status})` });
       } else {
-        setTestResult({ ok: false, message: `Error HTTP ${res.status}` });
+        setTestResult({ ok: false, message: data.error || `Error HTTP ${res.status}` });
       }
     } catch (err: any) {
       setTestResult({ ok: false, message: err.message });

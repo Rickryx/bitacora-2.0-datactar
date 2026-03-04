@@ -343,14 +343,15 @@ const App: React.FC = () => {
 
       if (!config) return;
 
-      const response = await fetch(config.nexus_endpoint, {
+      // Route through server-side proxy to avoid CORS and inject correct Supabase gateway auth
+      const response = await fetch('/api/nexus', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.api_key}`,
-          'apikey': config.api_key
-        },
-        body: JSON.stringify({ log: logData })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nexus_endpoint: config.nexus_endpoint,
+          api_key: config.api_key,
+          log: logData,
+        }),
       });
 
       if (!response.ok) {
