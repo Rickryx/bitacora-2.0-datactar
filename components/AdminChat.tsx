@@ -7,7 +7,12 @@ interface Message {
     content: string;
 }
 
-const AdminChat: React.FC = () => {
+interface AdminChatProps {
+    asSidebar?: boolean;
+    onCollapse?: () => void;
+}
+
+const AdminChat: React.FC<AdminChatProps> = ({ asSidebar, onCollapse }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: 'assistant', content: 'Hola Administrador, soy tu asistente de Bitácora. ¿Qué deseas consultar hoy sobre los registros?' }
@@ -21,8 +26,8 @@ const AdminChat: React.FC = () => {
     };
 
     useEffect(() => {
-        if (isOpen) scrollToBottom();
-    }, [messages, isOpen]);
+        if (asSidebar || isOpen) scrollToBottom();
+    }, [messages, isOpen, asSidebar]);
 
     const handleSend = async () => {
         if (!input.trim() || loading) return;
@@ -33,7 +38,6 @@ const AdminChat: React.FC = () => {
         setLoading(true);
 
         try {
-            // Fetch recent logs for context
             const { data: logs } = await supabase
                 .from('logs')
                 .select('*, entities(name)')
@@ -50,6 +54,75 @@ const AdminChat: React.FC = () => {
         }
     };
 
+    // Sidebar mode
+    if (asSidebar) {
+        return (
+            <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="bg-slate-900 p-4 text-white flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="size-8 rounded-xl bg-blue-500 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-sm">smart_toy</span>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-black tracking-tight">Bitácora AI</h4>
+                            <p className="text-[10px] opacity-70 font-medium tracking-wide">Asistente Administrativo</p>
+                        </div>
+                    </div>
+                    {onCollapse && (
+                        <button onClick={onCollapse} className="opacity-50 hover:opacity-100 transition-opacity">
+                            <span className="material-symbols-outlined">chevron_right</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* Messages Area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 no-scrollbar">
+                    {messages.map((m, i) => (
+                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user'
+                                    ? 'bg-primary text-white font-medium shadow-lg shadow-primary/10 rounded-tr-none'
+                                    : 'bg-white border border-slate-100 text-slate-800 shadow-sm rounded-tl-none font-medium'
+                                }`}>
+                                {m.content}
+                            </div>
+                        </div>
+                    ))}
+                    {loading && (
+                        <div className="flex justify-start">
+                            <div className="bg-white border border-slate-100 p-3 rounded-2xl rounded-tl-none flex gap-1">
+                                <div className="size-1.5 bg-slate-300 rounded-full animate-bounce"></div>
+                                <div className="size-1.5 bg-slate-300 rounded-full animate-bounce delay-150"></div>
+                                <div className="size-1.5 bg-slate-300 rounded-full animate-bounce delay-300"></div>
+                            </div>
+                        </div>
+                    )}
+                    <div ref={chatEndRef} />
+                </div>
+
+                {/* Input Area */}
+                <div className="p-3 bg-white border-t border-slate-100 flex gap-2 shrink-0">
+                    <input
+                        type="text"
+                        placeholder="Pregúntame algo..."
+                        className="flex-1 bg-slate-50 border-none rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                    />
+                    <button
+                        onClick={handleSend}
+                        disabled={loading || !input.trim()}
+                        className="size-9 bg-primary text-white rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 active:scale-90 transition-all disabled:opacity-50"
+                    >
+                        <span className="material-symbols-outlined text-sm">send</span>
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Floating mode (default)
     return (
         <div className="fixed bottom-6 right-6 z-[100]">
             {/* Chat Window */}

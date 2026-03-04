@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
-import Layout from '../components/Layout';
 import { AppView, User } from '../types';
 import WebhookManager from '../components/WebhookManager';
 import NexusConfigPanel from '../components/NexusConfigPanel';
@@ -38,9 +37,19 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     });
 
     const [filterRole, setFilterRole] = useState<string>('');
-    const [filterEntity, setFilterEntity] = useState<string>('');
     const [sortBy, setSortBy] = useState<string>('name');
     const [shiftAlerts, setShiftAlerts] = useState<any[]>([]);
+
+    // Chat sidebar
+    const [chatOpen, setChatOpen] = useState(false);
+
+    // Shifts sub-view
+    const [shiftSubView, setShiftSubView] = useState<'list' | 'calendar'>('list');
+    const [shiftFilter, setShiftFilter] = useState<string>('all');
+    const [formCollapsed, setFormCollapsed] = useState(false);
+
+    // Entity staff management
+    const [assignUserId, setAssignUserId] = useState('');
 
     // Report tab state
     const [reportPeriod, setReportPeriod] = useState<'hoy' | 'semana' | 'mes' | 'custom'>('semana');
@@ -131,7 +140,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     };
 
     const fetchEntities = async () => {
-        const { data, error } = await supabase.from('entities').select('*').order('name');
+        const { data, error } = await supabase.from('entities').select('*, profiles(id, full_name, role, avatar_url)').order('name');
         if (data) setEntities(data);
         if (error) console.error(error);
     };
@@ -245,16 +254,43 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
         else fetchProfiles();
     };
 
+    const handleRemoveStaff = async (userId: string) => {
+        const { error } = await supabase.from('profiles').update({ entity_id: null }).eq('id', userId);
+        if (error) alert(error.message);
+        else fetchEntities();
+    };
+
+    const handleAssignStaff = async (entityId: string) => {
+        if (!assignUserId) return;
+        const { error } = await supabase.from('profiles').update({ entity_id: entityId }).eq('id', assignUserId);
+        if (error) alert(error.message);
+        else { setAssignUserId(''); fetchEntities(); fetchProfiles(); }
+    };
+
+    const handleCompleteShift = async (shiftId: string) => {
+        const { error } = await supabase.from('shifts').update({ status: 'COMPLETED', actual_end: new Date().toISOString() }).eq('id', shiftId);
+        if (error) alert(error.message);
+        else fetchShifts();
+    };
+
+    const handleCancelShift = async (shiftId: string) => {
+        if (!confirm('¿Cancelar este turno?')) return;
+        const { error } = await supabase.from('shifts').update({ status: 'CANCELLED' }).eq('id', shiftId);
+        if (error) alert(error.message);
+        else fetchShifts();
+    };
+
     return (
-        <Layout activeView={AppView.SETTINGS} onNavigate={onNavigate} onVoiceClick={() => { }}>
-            <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 pt-10 pb-6">
-                <div className="flex items-center gap-4 mb-6">
-                    <button onClick={() => {
-                        if (detailView) { setDetailView(null); setDetailId(null); }
-                        else onNavigate(AppView.DASHBOARD);
-                    }} className="text-slate-900 flex items-center">
-                        <span className="material-symbols-outlined font-bold">arrow_back_ios</span>
-                    </button>
+        <div className="flex h-screen overflow-hidden bg-slate-50">
+            {/* Main content column */}
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 pt-8 pb-5 shrink-0">
+                <div className="flex items-center gap-4 mb-5">
+                    {detailView && (
+                        <button onClick={() => { setDetailView(null); setDetailId(null); }} className="text-slate-900 flex items-center">
+                            <span className="material-symbols-outlined font-bold">arrow_back_ios</span>
+                        </button>
+                    )}
                     <h1 className="text-2xl font-black tracking-tight text-slate-900">
                         {detailView === 'entity' ? 'Detalle de Entidad' : detailView === 'user' ? 'Perfil de Usuario' : 'Administración'}
                     </h1>
@@ -293,7 +329,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                 })()}
             </header>
 
-            <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-24">
+            <main className="flex-1 overflow-y-auto p-6 space-y-8">
                 {detailView === 'entity' && detailId && (
                     <div className="space-y-6 animate-in slide-in-from-right-10 duration-500">
                         <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
@@ -309,22 +345,60 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                         </div>
 
                         <div className="space-y-4">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Usuarios Asignados</h3>
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Personal Asignado</h3>
                             <div className="space-y-3">
-                                {profiles.filter(p => shifts.some(s => s.user_id === p.id && s.entity_id === detailId)).map(profile => (
-                                    <div key={profile.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="size-10 rounded-full bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center text-slate-300">
-                                                {profile.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined">person</span>}
-                                            </div>
-                                            <span className="font-bold text-slate-900">{profile.full_name}</span>
-                                        </div>
-                                        <span className="text-[10px] font-black text-primary uppercase">Asignado</span>
-                                    </div>
-                                ))}
-                                {profiles.filter(p => shifts.some(s => s.user_id === p.id && s.entity_id === detailId)).length === 0 && (
-                                    <p className="text-center py-8 text-slate-400 font-medium">No hay usuarios asignados a esta entidad.</p>
-                                )}
+                                {(() => {
+                                    const entity = entities.find(e => e.id === detailId);
+                                    const staff: any[] = entity?.profiles || [];
+                                    const unassigned = profiles.filter(p => !p.entity_id);
+                                    return (
+                                        <>
+                                            {staff.length === 0 && (
+                                                <p className="text-center py-6 text-slate-400 font-medium text-sm">Sin personal asignado a esta entidad.</p>
+                                            )}
+                                            {staff.map((person: any) => (
+                                                <div key={person.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="size-10 rounded-full bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center text-slate-300">
+                                                            {person.avatar_url ? <img src={person.avatar_url} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined">person</span>}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-900 text-sm">{person.full_name}</p>
+                                                            <span className={`text-[10px] font-black uppercase ${person.role === 'ADMIN' ? 'text-purple-500' : person.role === 'COORDINATOR' ? 'text-teal-500' : 'text-blue-500'}`}>{person.role}</span>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleRemoveStaff(person.id)}
+                                                        className="text-[10px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest transition-colors"
+                                                    >
+                                                        Quitar
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {unassigned.length > 0 && (
+                                                <div className="flex gap-2 mt-2">
+                                                    <select
+                                                        className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/10"
+                                                        value={assignUserId}
+                                                        onChange={e => setAssignUserId(e.target.value)}
+                                                    >
+                                                        <option value="">Agregar personal...</option>
+                                                        {unassigned.map(p => (
+                                                            <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
+                                                        ))}
+                                                    </select>
+                                                    <button
+                                                        onClick={() => handleAssignStaff(detailId!)}
+                                                        disabled={!assignUserId}
+                                                        className="px-5 py-2.5 bg-primary text-white rounded-2xl font-bold text-sm shadow-soft disabled:opacity-40 active:scale-95 transition-all"
+                                                    >
+                                                        Agregar
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -505,7 +579,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                     </div>
                                 )}
 
-                                <AdminChat />
                             </div>
                         )}
 
@@ -522,6 +595,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                         <option value="">Todos los Roles</option>
                                         <option value="GUARD">Guardias</option>
                                         <option value="ADMIN">Administradores</option>
+                                        <option value="COORDINATOR">Coordinadores</option>
                                     </select>
                                     <select
                                         className="bg-white border-none rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600 shadow-sm"
@@ -564,6 +638,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                                                     onChange={e => setEditForm({ ...editForm, role: e.target.value })}
                                                                 >
                                                                     <option value="GUARD">Guardia</option>
+                                                                    <option value="COORDINATOR">Coordinador</option>
                                                                     <option value="ADMIN">Administrador</option>
                                                                 </select>
                                                             </div>
@@ -594,7 +669,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                                                 </div>
                                                                 <div>
                                                                     <h3 className="font-bold text-slate-900 leading-tight">{profile.full_name || 'Sin Nombre'}</h3>
-                                                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${profile.role === 'ADMIN' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${profile.role === 'ADMIN' ? 'bg-purple-50 text-purple-600' : profile.role === 'COORDINATOR' ? 'bg-teal-50 text-teal-600' : 'bg-blue-50 text-blue-600'}`}>
                                                                         {profile.role || 'GUARD'}
                                                                     </span>
                                                                 </div>
@@ -696,15 +771,15 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                                         <span className="text-xs font-bold text-slate-600">Activo</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex -space-x-2">
-                                                    {[1, 2, 3].map(i => (
-                                                        <div key={i} className="size-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center overflow-hidden">
-                                                            <span className="material-symbols-outlined !text-[10px] text-slate-300">person</span>
-                                                        </div>
-                                                    ))}
-                                                    <div className="size-8 rounded-full bg-slate-50 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                                        +2
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex -space-x-2">
+                                                        {(entity.profiles || []).slice(0, 3).map((p: any) => (
+                                                            <div key={p.id} className="size-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center overflow-hidden">
+                                                                {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined !text-[10px] text-slate-300">person</span>}
+                                                            </div>
+                                                        ))}
                                                     </div>
+                                                    <span className="text-xs font-bold text-slate-400">{(entity.profiles || []).length} personal</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -714,79 +789,201 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                         )}
 
                         {activeTab === 'shifts' && (
-                            <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-                                <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 space-y-6 print:hidden">
-                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Programación de Turnos</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Guardia Responsable</label>
-                                            <select
-                                                className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
-                                                value={shiftForm.user_id}
-                                                onChange={e => setShiftForm({ ...shiftForm, user_id: e.target.value })}
-                                            >
-                                                <option value="">Seleccionar Guardia</option>
-                                                {profiles.filter(p => p.role === 'GUARD').map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Ubicación / Entidad</label>
-                                            <select
-                                                className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
-                                                value={shiftForm.entity_id}
-                                                onChange={e => setShiftForm({ ...shiftForm, entity_id: e.target.value })}
-                                            >
-                                                <option value="">Seleccionar Entidad</option>
-                                                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Inicio de Turno</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
-                                                value={shiftForm.scheduled_start}
-                                                onChange={e => setShiftForm({ ...shiftForm, scheduled_start: e.target.value })}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Fin de Turno</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
-                                                value={shiftForm.scheduled_end}
-                                                onChange={e => setShiftForm({ ...shiftForm, scheduled_end: e.target.value })}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Rondas esperadas en el turno</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="20"
-                                                className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
-                                                value={shiftForm.expected_rounds}
-                                                onChange={e => setShiftForm({ ...shiftForm, expected_rounds: parseInt(e.target.value) || 0 })}
-                                            />
-                                        </div>
-                                    </div>
+                            <div className="space-y-6 animate-in fade-in duration-500">
+                                {/* Collapsable shift form */}
+                                <div className="bg-slate-50 rounded-[32px] border border-slate-100 overflow-hidden">
                                     <button
-                                        onClick={handleSaveShift}
-                                        className="w-full bg-primary text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-primary/20 active:scale-[0.98] transition-all"
+                                        onClick={() => setFormCollapsed(f => !f)}
+                                        className="w-full flex items-center justify-between px-6 py-4 text-left"
                                     >
-                                        {editingId ? 'Actualizar Turno' : 'Programar Turno'}
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Programar Turno</span>
+                                        <span className="material-symbols-outlined text-slate-400 transition-transform" style={{ transform: formCollapsed ? 'rotate(0deg)' : 'rotate(180deg)' }}>
+                                            expand_more
+                                        </span>
                                     </button>
+                                    {!formCollapsed && (
+                                        <div className="px-6 pb-6 space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Guardia Responsable</label>
+                                                    <select
+                                                        className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
+                                                        value={shiftForm.user_id}
+                                                        onChange={e => setShiftForm({ ...shiftForm, user_id: e.target.value })}
+                                                    >
+                                                        <option value="">Seleccionar Guardia</option>
+                                                        {profiles.filter(p => p.role === 'GUARD').map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Ubicación / Entidad</label>
+                                                    <select
+                                                        className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
+                                                        value={shiftForm.entity_id}
+                                                        onChange={e => setShiftForm({ ...shiftForm, entity_id: e.target.value })}
+                                                    >
+                                                        <option value="">Seleccionar Entidad</option>
+                                                        {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Inicio de Turno</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
+                                                        value={shiftForm.scheduled_start}
+                                                        onChange={e => setShiftForm({ ...shiftForm, scheduled_start: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Fin de Turno</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
+                                                        value={shiftForm.scheduled_end}
+                                                        onChange={e => setShiftForm({ ...shiftForm, scheduled_end: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Rondas esperadas</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="20"
+                                                        className="w-full bg-white border border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10 transition-all"
+                                                        value={shiftForm.expected_rounds}
+                                                        onChange={e => setShiftForm({ ...shiftForm, expected_rounds: parseInt(e.target.value) || 0 })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={handleSaveShift}
+                                                className="w-full bg-primary text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-primary/20 active:scale-[0.98] transition-all"
+                                            >
+                                                Programar Turno
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center px-1">
-                                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Cronograma Semanal</h3>
+                                {/* Sub-tabs */}
+                                <div className="flex gap-2">
+                                    {(['list', 'calendar'] as const).map(v => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setShiftSubView(v)}
+                                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${shiftSubView === v ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}
+                                        >
+                                            {v === 'list' ? 'Lista' : 'Calendario'}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Sub-vista Lista */}
+                                {shiftSubView === 'list' && (
+                                    <div className="space-y-4">
+                                        {/* Filter pills */}
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                            {[
+                                                { value: 'all', label: 'Todos' },
+                                                { value: 'PENDING', label: 'Pendientes' },
+                                                { value: 'ACTIVE', label: 'Activos' },
+                                                { value: 'COMPLETED', label: 'Completados' },
+                                                { value: 'CANCELLED', label: 'Cancelados' },
+                                            ].map(f => (
+                                                <button
+                                                    key={f.value}
+                                                    onClick={() => setShiftFilter(f.value)}
+                                                    className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all ${shiftFilter === f.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'}`}
+                                                >
+                                                    {f.label}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Shift cards */}
+                                        <div className="space-y-3">
+                                            {shifts
+                                                .filter(s => shiftFilter === 'all' || s.status === shiftFilter)
+                                                .map(shift => {
+                                                    const guardName = shift.profiles?.full_name || 'Guardia';
+                                                    const entityName = shift.entities?.name || 'Entidad';
+                                                    const statusColors: Record<string, string> = {
+                                                        ACTIVE: 'bg-green-50 text-green-600',
+                                                        PENDING: 'bg-amber-50 text-amber-600',
+                                                        COMPLETED: 'bg-slate-100 text-slate-500',
+                                                        CANCELLED: 'bg-red-50 text-red-400',
+                                                    };
+                                                    const statusColor = statusColors[shift.status] || 'bg-slate-100 text-slate-400';
+                                                    const startTime = shift.scheduled_start ? new Date(shift.scheduled_start).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '--';
+                                                    const endTime = shift.scheduled_end ? new Date(shift.scheduled_end).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '--';
+                                                    return (
+                                                        <div key={shift.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                                    <div className="size-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                                                                        <span className="material-symbols-outlined text-slate-300">person</span>
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="font-bold text-slate-900 text-sm truncate">{guardName}</p>
+                                                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                                                                <span className="material-symbols-outlined !text-xs">location_on</span>
+                                                                                {entityName}
+                                                                            </span>
+                                                                            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                                                                <span className="material-symbols-outlined !text-xs">schedule</span>
+                                                                                {startTime}–{endTime}
+                                                                            </span>
+                                                                        </div>
+                                                                        {shift.expected_rounds > 0 && (
+                                                                            <p className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1">
+                                                                                <span className="material-symbols-outlined !text-xs">refresh</span>
+                                                                                Rondas: {shift.expected_rounds}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${statusColor}`}>
+                                                                    {shift.status}
+                                                                </span>
+                                                            </div>
+                                                            {(shift.status === 'ACTIVE' || shift.status === 'PENDING') && (
+                                                                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50">
+                                                                    {shift.status === 'ACTIVE' && (
+                                                                        <button
+                                                                            onClick={() => handleCompleteShift(shift.id)}
+                                                                            className="flex-1 py-2 bg-green-50 text-green-600 rounded-xl text-xs font-bold hover:bg-green-100 transition-colors"
+                                                                        >
+                                                                            Completar
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => handleCancelShift(shift.id)}
+                                                                        className="flex-1 py-2 bg-slate-50 text-slate-400 rounded-xl text-xs font-bold hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                                    >
+                                                                        Cancelar
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            {shifts.filter(s => shiftFilter === 'all' || s.status === shiftFilter).length === 0 && (
+                                                <div className="bg-slate-50 border border-dashed border-slate-200 p-8 rounded-3xl text-center">
+                                                    <p className="text-xs text-slate-400 font-bold uppercase">Sin turnos en este estado</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
+                                )}
+
+                                {/* Sub-vista Calendario */}
+                                {shiftSubView === 'calendar' && (
                                     <WeeklyCalendar
                                         shifts={shifts}
                                         profiles={profiles}
                                         onEditShift={(s) => {
-                                            setEditingId(s.id);
                                             setShiftForm({
                                                 user_id: s.user_id,
                                                 entity_id: s.entity_id,
@@ -794,10 +991,10 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                                                 scheduled_end: s.scheduled_end.split('.')[0],
                                                 expected_rounds: s.expected_rounds ?? 3
                                             });
-                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                            setFormCollapsed(false);
                                         }}
                                     />
-                                </div>
+                                )}
                             </div>
                         )}
 
@@ -991,7 +1188,22 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
                     </>
                 )}
             </main>
-        </Layout>
+            </div>{/* end main content column */}
+
+            {/* Chat sidebar */}
+            <div className={`border-l border-slate-100 bg-white flex flex-col transition-all duration-300 overflow-hidden shrink-0 ${chatOpen ? 'w-80' : 'w-12'}`}>
+                {chatOpen
+                    ? <AdminChat asSidebar={true} onCollapse={() => setChatOpen(false)} />
+                    : <button
+                        onClick={() => setChatOpen(true)}
+                        className="mt-6 flex flex-col items-center gap-1 w-full text-slate-400 hover:text-primary transition-colors py-2"
+                        title="Abrir asistente AI"
+                      >
+                        <span className="material-symbols-outlined">forum</span>
+                      </button>
+                }
+            </div>
+        </div>
     );
 };
 

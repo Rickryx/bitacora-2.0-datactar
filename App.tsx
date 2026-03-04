@@ -34,7 +34,7 @@ const App: React.FC = () => {
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
         if (profile?.role === 'ADMIN' || profile?.role === 'COORDINATOR') {
-          setCurrentView(AppView.DASHBOARD);
+          setCurrentView(AppView.ADMIN);
         } else {
           setCurrentView(AppView.WELCOME);
         }
@@ -48,7 +48,7 @@ const App: React.FC = () => {
       if (event === 'SIGNED_IN' && session?.user) {
         const profile = await fetchProfile(session.user.id);
         if (profile?.role === 'ADMIN' || profile?.role === 'COORDINATOR') {
-          setCurrentView(AppView.DASHBOARD);
+          setCurrentView(AppView.ADMIN);
         } else {
           setCurrentView(AppView.WELCOME);
         }
