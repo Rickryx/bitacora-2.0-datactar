@@ -355,8 +355,10 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const errMsg = errBody.error || `HTTP ${response.status}`;
         await supabase.from('nexus_config')
-          .update({ last_error: `HTTP ${response.status}`, updated_at: new Date().toISOString() })
+          .update({ last_error: errMsg, updated_at: new Date().toISOString() })
           .eq('entity_id', activeShift.entity_id);
       } else {
         await supabase.from('nexus_config')
