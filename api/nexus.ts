@@ -18,21 +18,32 @@ export default async function handler(req: Request) {
       );
     }
 
-    // The Nexus bridge (Datactar's Supabase project) validates dc_live_ internally.
-    // We send it in all common auth header formats so the bridge can pick whichever it expects.
-    // Format expected by Datactar bridge: { api_key, type, record }
-    // For test/ping: only api_key (bridge validates key and returns ok)
+    // Bridge validates the source via x-api-key header (SHA-256 hashed, stored in sources table).
+    // api_key does NOT go in the body — only in the header.
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': api_key,
+    };
+
+    // Ping: validate key only. Log: full event payload.
     const payload = test
-      ? { api_key }
-      : { api_key, type: 'log', record: log };
+      ? { event: 'ping' }
+      : {
+          event: 'log.created',
+          data: {
+            id: log.id,
+            type: (log.type || 'security_log').toLowerCase(),
+            title: log.title || 'Evento de Bitácora',
+            subtitle: log.subtitle || '',
+            description: log.description || '',
+            details: log.details || {},
+            media_urls: log.media_urls || [],
+          },
+        };
 
     const nexusResponse = await fetch(nexus_endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${api_key}`,
-        'x-api-key': api_key,
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 
