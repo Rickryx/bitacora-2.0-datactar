@@ -144,8 +144,14 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
 
     const fetchEntities = async () => {
         const { data, error } = await supabase.from('entities').select('*, profiles(id, full_name, role, avatar_url)').order('name');
-        if (data) setEntities(data);
-        if (error) console.error(error);
+        if (data) {
+            setEntities(data);
+        } else if (error) {
+            console.error('fetchEntities (with profiles):', error.message);
+            // Fallback: load entities without staff join
+            const { data: plain } = await supabase.from('entities').select('*').order('name');
+            if (plain) setEntities(plain);
+        }
     };
 
     const fetchShifts = async () => {
