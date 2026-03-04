@@ -135,7 +135,9 @@ const App: React.FC = () => {
         location: 'Consultando...',
         turn: 'Consultando...',
         avatarUrl: profileData.avatar_url || 'https://ui-avatars.com/api/?name=Guard',
-        role: (['ADMIN', 'COORDINATOR'].includes(profileData.role) ? profileData.role : 'GUARD') as User['role']
+        role: (['ADMIN', 'COORDINATOR'].includes(profileData.role) ? profileData.role : 'GUARD') as User['role'],
+        entity_id: profileData.entity_id || undefined,
+        document_id: profileData.document_id || undefined,
       };
 
       setUser(newUser);
