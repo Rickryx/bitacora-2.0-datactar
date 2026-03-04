@@ -82,9 +82,18 @@ const WebhookManager: React.FC = () => {
 
     return (
         <div className="space-y-4">
+            {/* Explanation */}
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3">
+                <span className="material-symbols-outlined text-amber-400 shrink-0">info</span>
+                <div className="text-xs text-amber-800 space-y-1">
+                    <p className="font-black uppercase tracking-widest text-[10px]">¿Para qué son los webhooks?</p>
+                    <p className="font-medium leading-relaxed">Cada vez que un guardia registra un evento, Bitácora envía automáticamente los datos a las URLs que configures aquí. Úsalos para conectar con <strong>Zapier</strong>, <strong>Make</strong>, <strong>Slack</strong>, o cualquier sistema externo. <em>Si quieres conectar con Nexus/Datactar, usa la pestaña Nexus.</em></p>
+                </div>
+            </div>
+
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-slate-800">Webhooks</h2>
+                    <h2 className="text-lg font-bold text-slate-800">Webhooks activos</h2>
                     <button onClick={fetchWebhooks} className="p-1 text-slate-300 hover:text-primary transition-colors">
                         <span className={`material-symbols-outlined text-sm ${loading ? 'animate-spin' : ''}`}>refresh</span>
                     </button>

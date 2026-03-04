@@ -13,6 +13,7 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const [form, setForm] = useState({
     nexus_endpoint: 'https://tzgnhbexeyyrmgrcyjvo.supabase.co/functions/v1/bridge',
     api_key: ''
@@ -141,42 +142,46 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
   if (!config || isEditing) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary">hub</span>
+        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-5">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">Conexión con Nexus</h2>
-            <p className="text-xs text-slate-400">Conecta esta entidad con su cerebro centralizado</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4 shadow-inner">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
               Nexus Endpoint
             </label>
+            <p className="text-[10px] text-slate-400 mb-2">URL del bridge de Datactar. Normalmente no necesitas cambiar este valor.</p>
             <input
               placeholder="https://xxx.supabase.co/functions/v1/bridge"
-              className="w-full border-b border-slate-200 py-2 font-bold focus:outline-none focus:border-primary bg-transparent text-sm"
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 font-mono text-xs font-bold focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
               value={form.nexus_endpoint}
               onChange={e => setForm({ ...form, nexus_endpoint: e.target.value })}
             />
           </div>
+
           <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
               API Key
             </label>
-            <input
-              type="password"
-              placeholder="dc_live_..."
-              className="w-full border-b border-slate-200 py-2 font-bold focus:outline-none focus:border-primary bg-transparent text-sm"
-              value={form.api_key}
-              onChange={e => setForm({ ...form, api_key: e.target.value })}
-            />
+            <p className="text-[10px] text-slate-400 mb-2">El key que te entregó tu fuente Nexus (empieza con <code className="bg-slate-100 px-1 rounded">dc_live_</code>).</p>
+            <div className="relative">
+              <input
+                type={showKey ? 'text' : 'password'}
+                placeholder="dc_live_..."
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 pr-10 font-mono text-xs font-bold focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                value={form.api_key}
+                onChange={e => setForm({ ...form, api_key: e.target.value })}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <span className="material-symbols-outlined !text-lg">{showKey ? 'visibility_off' : 'visibility'}</span>
+              </button>
+            </div>
           </div>
 
           {testResult && (
-            <div className={`p-3 rounded-xl text-xs font-bold ${testResult.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-              <span className="material-symbols-outlined text-sm align-middle mr-1">
+            <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${testResult.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              <span className="material-symbols-outlined text-sm shrink-0">
                 {testResult.ok ? 'check_circle' : 'error'}
               </span>
               {testResult.message}
@@ -187,16 +192,16 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
             <button
               onClick={handleTestConnection}
               disabled={testing}
-              className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50"
+              className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50"
             >
-              {testing ? 'Probando...' : 'Probar Conexión'}
+              {testing ? 'Probando...' : 'Probar conexión'}
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
-              className="flex-1 py-3 bg-primary text-white rounded-2xl font-black text-sm shadow-soft transition-all active:scale-95 disabled:opacity-50"
+              disabled={saving || !form.api_key}
+              className="flex-1 py-3 bg-primary text-white rounded-2xl font-black text-sm shadow-soft transition-all active:scale-95 disabled:opacity-40"
             >
-              {saving ? 'Guardando...' : 'Guardar y Activar'}
+              {saving ? 'Guardando...' : 'Activar'}
             </button>
           </div>
 
@@ -263,6 +268,12 @@ const NexusConfigPanel: React.FC<NexusConfigPanelProps> = ({ entityId }) => {
         <div>
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Endpoint</label>
           <p className="text-xs text-slate-600 font-mono truncate">{config.nexus_endpoint}</p>
+        </div>
+
+        {/* API Key masked */}
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">API Key</label>
+          <p className="text-xs text-slate-600 font-mono">{config.api_key ? config.api_key.slice(0, 10) + '••••••••••••' : '—'}</p>
         </div>
 
         {/* Last sync */}

@@ -51,6 +51,9 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
     // Entity staff management
     const [assignUserId, setAssignUserId] = useState('');
 
+    // Nexus entity selector
+    const [nexusEntityId, setNexusEntityId] = useState('');
+
     // Report tab state
     const [reportPeriod, setReportPeriod] = useState<'hoy' | 'semana' | 'mes' | 'custom'>('semana');
     const [reportLogs, setReportLogs] = useState<any[]>([]);
@@ -1182,8 +1185,41 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNavigate }) => {
 
                         {activeTab === 'webhooks' && <WebhookManager />}
 
-                        {activeTab === 'nexus' && entities.length > 0 && (
-                            <NexusConfigPanel entityId={entities[0].id} />
+                        {activeTab === 'nexus' && (
+                            <div className="space-y-5 animate-in fade-in duration-500">
+                                {/* Explanation banner */}
+                                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3">
+                                    <span className="material-symbols-outlined text-blue-400 shrink-0">info</span>
+                                    <div className="text-xs text-blue-700 space-y-1">
+                                        <p className="font-black uppercase tracking-widest text-[10px]">¿Qué es Nexus?</p>
+                                        <p className="font-medium leading-relaxed">Nexus sincroniza los eventos de Bitácora con el sistema centralizado de Datactar. Necesitas el <strong>endpoint</strong> y el <strong>API key</strong> que te entregó tu fuente Nexus. Cada entidad tiene su propia configuración.</p>
+                                    </div>
+                                </div>
+
+                                {entities.length === 0 ? (
+                                    <div className="bg-slate-50 border border-dashed border-slate-200 p-10 rounded-3xl text-center space-y-3">
+                                        <span className="material-symbols-outlined text-slate-300 !text-4xl">corporate_fare</span>
+                                        <p className="text-sm font-bold text-slate-400">Primero crea una entidad en la pestaña <strong>Entidades</strong> para configurar Nexus.</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Entity selector */}
+                                        {entities.length > 1 && (
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configurar para entidad</label>
+                                                <select
+                                                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/10"
+                                                    value={nexusEntityId || entities[0].id}
+                                                    onChange={e => setNexusEntityId(e.target.value)}
+                                                >
+                                                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
+                                        <NexusConfigPanel entityId={nexusEntityId || entities[0].id} />
+                                    </>
+                                )}
+                            </div>
                         )}
                     </>
                 )}
